@@ -1,0 +1,101 @@
+<?php
+///////////////////////////////////////
+// ユーザーデータを処理
+///////////////////////////////////////
+ 
+/**
+ * ユーザーを作成
+ *
+ * 
+ * @return bool
+ */
+function createUser(array $data)
+{
+    $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
+    // 接続チェック
+    if ($mysqli->connect_errno) {
+        echo 'MySQLの接続に失敗しました。：' . $mysqli->connect_error . "\n";
+        exit;
+    }
+ 
+    // 新規登録のSQLを作成
+    $query = 'INSERT INTO users (email, name, nickname, password) VALUES (?, ?, ?, ?)';
+    $statement = $mysqli->prepare($query);
+ 
+    // パスワードをハッシュ値に変換
+    $data['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
+ 
+    // ? の部分にセットする内容
+    // 第一引数のsは変数の型を指定(s=string)
+    $statement->bind_param('ssss', $data['email'], $data['name'], $data['nickname'], $data['password']);
+ 
+    // 処理を実行
+    $response = $statement->execute();
+    if ($response === false) {
+        echo 'エラーメッセージ：' . $mysqli->error . "\n";
+    }
+ 
+    // 接続を解放
+    $statement->close();
+    $mysqli->close();
+ 
+    return $response;
+}
+
+/**
+ * ユーザー情報取得：ログインチェック
+ *
+ * @param string $email
+ * @param string $password
+ * @return array|false
+ */
+function findUserAndCheckPassword(string $email, string $password)
+{
+    // DB接続
+    $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
+    // 接続チェック
+    if ($mysqli->connect_errno) {
+        echo 'MySQLの接続に失敗しました。：' . $mysqli->connect_error . "\n";
+        exit;
+    }
+
+    // 入力値をエスケープ
+    $email = $mysqli->real_escape_string($email);
+ 
+    // SQLクエリを作成
+    // - 外部からのリクエストは何が入ってくるかわからないので、必ず、エスケープしたものをクオートで囲む
+    $query = 'SELECT * FROM users WHERE email = "' . $email . '"';
+ 
+    // クエリ実行
+    $result = $mysqli->query($query);
+ 
+    // クエリ実行に失敗した場合->return
+    if (!$result) {
+        // MySQL処理中にエラー発生
+        echo 'エラーメッセージ：' . $mysqli->error . "\n";
+        $mysqli->close();
+        return false;
+    }
+ 
+    // ユーザー情報を取得
+    $user = $result->fetch_array(MYSQLI_ASSOC);  
+    // fetch_arrayメソッドはレコードを一件取得する 
+      
+    // ユーザーが存在しない場合->return
+    if (!$user) {
+        $mysqli->close();
+        return false;
+    }
+ 
+    // パスワードチェック、不一致の場合->return
+    if (!password_verify($password, $user['password'])) {
+        $mysqli->close();
+        return false;
+    }
+ 
+    // DB接続を解放
+    $mysqli->close();
+ 
+    return $user;
+}
+
